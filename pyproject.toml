@@ -1,0 +1,20 @@
+[project]
+name = "compostaje"
+version = "1.0.0"
+description = "Modelación cinética multimodelo del compostaje aeróbico (memoria de título, UdeC 2025)"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Vicente Muñoz" }]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["slow: recorre las 159 series (≈1 min)"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E731"]
