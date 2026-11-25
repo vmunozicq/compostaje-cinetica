@@ -3,6 +3,7 @@
 > Ajusta cuatro modelos cinéticos a curvas de degradación de compost, elige el mejor por AICc y estima la incertidumbre de sus parámetros, para dimensionar el tiempo de residencia de un reactor de compostaje.
 
 [![CI](https://github.com/vmunozicq/compostaje-cinetica/actions/workflows/ci.yml/badge.svg)](https://github.com/vmunozicq/compostaje-cinetica/actions/workflows/ci.yml)
+[![Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://compostaje-cinetica.streamlit.app)
 [![Licencia: MIT](https://img.shields.io/badge/licencia-MIT-green.svg)](LICENSE)
 
 ![App: ajuste de la serie 25_1](docs/figuras/app_serie.png)
@@ -89,6 +90,8 @@ La conclusión de la memoria se mantiene: ningún modelo es universal.
 ![k por sustrato](docs/figuras/k_por_sustrato.png)
 
 ## 5. Demo
+
+App en línea: **https://compostaje-cinetica.streamlit.app** (si está dormida, pulsa el botón para despertarla; tarda unos 30 s).
 
 La app tiene cuatro pestañas:
 
