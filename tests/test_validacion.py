@@ -41,7 +41,11 @@ def test_mismas_159_series(resultados):
                                             ("gompertz", "R2_Gomp")])
 def test_r2_identico_a_la_memoria(resultados, modelo, col_ref):
     res, ref = resultados
-    diff = (res[f"{modelo}__r2"] - ref.loc[res.index, col_ref]).abs()
+    r2_ref = ref.loc[res.index, col_ref]
+    # -999 marca un ajuste que no convergió en el script original. Si una versión más
+    # nueva de NumPy/SciPy sí converge, no es una discrepancia del modelo: se excluye.
+    ok = r2_ref > -999
+    diff = (res.loc[ok, f"{modelo}__r2"] - r2_ref[ok]).abs()
     assert diff.max() < TOL_R2
 
 
