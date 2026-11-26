@@ -119,18 +119,34 @@ Las condiciones iniciales explican poco de k: un modelo entrenado con la literat
 
 ![Predicción de k](docs/figuras/ml_paridad.png)
 
-Un simulador de reactor con calor, agua y O₂ está en especificación ([`docs/modelo_reactor.md`](docs/modelo_reactor.md)).
+### Más allá de la memoria: simulador de reactor
+
+La memoria tampoco cubrió la transferencia de calor y masa, la aireación ni el balance de agua. El simulador implementa el modelo de Petric y Selimbašić (2008, doi [10.1016/j.cej.2007.08.017](https://doi.org/10.1016/j.cej.2007.08.017)) para un reactor de 32 L con aireación forzada. Resuelve diez ecuaciones diferenciales acopladas: materia orgánica, agua, O₂ y CO₂ en el sólido y en el gas, y las temperaturas del sustrato y del gas ([`docs/modelo_reactor.md`](docs/modelo_reactor.md)).
+
+Frente al experimento 2 del artículo (datos digitalizados de sus figuras), el error cuadrático medio es de 5,8 °C en temperatura, 1,9 puntos en conversión y 2,7 puntos en O₂. Con los parámetros cinéticos publicados, el experimento solo se reproduce aplicando la corrección por temperatura; con las cuatro correcciones de la cinética, el modelo subpredice (hallazgo H-1).
+
+| Caudal de aire (m³/h) | T máx (°C) | Horas ≥ 55 °C | Conversión 14 d (%) | O₂ mín (%) |
+| ---: | ---: | ---: | ---: | ---: |
+| 0,06 | 71,4 | 144 | 44,6 | 6,2 |
+| 0,10 | 70,6 | 110 | 43,2 | 12,0 |
+| 0,18 | 68,5 | 70 | 40,8 | 16,1 |
+| 0,26 | 65,5 | 47 | 38,8 | 17,7 |
+
+Más aire enfría y seca el material: acorta la fase termófila, pero mantiene el O₂ lejos de condiciones anóxicas.
+
+![Validación del simulador](docs/figuras/reactor_validacion.png)
 
 ## 5. Demo
 
 App en línea: **https://compostaje-cinetica.streamlit.app** (si está dormida, pulsa el botón para despertarla; tarda unos 30 s).
 
-La app tiene cuatro pestañas:
+La app tiene estas pestañas:
 
 - **Explorar una serie**: elige un sustrato y una serie, compara los cuatro ajustes en la versión corregida o como en la memoria, y calcula el IC 95 % de k, Rm y λ con bootstrap de residuos o de pares.
 - **Resumen de 159 series**: ganadores por criterio y distribución de k por sustrato.
 - **Ajustar mis datos**: pega un CSV con `t`, `C` y opcionalmente `T`, y obtén los cuatro ajustes con su AICc.
 - **Predecir k (ML)**: estima k para un sustrato y unas condiciones, y avisa si la entrada está fuera del dominio de los datos.
+- **Simular reactor**: cambia caudal de aire, humedad, masa y temperaturas, y ve la temperatura, la conversión, el O₂ y la humedad en 14 días.
 - **Acerca de**.
 
 | Resumen | Ajustar mis datos |

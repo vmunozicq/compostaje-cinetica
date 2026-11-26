@@ -1,6 +1,6 @@
 # Ampliación 2: simulador de reactor (calor, agua, O₂ y CO₂)
 
-> **Para revisión de Vicente.** El código está en la rama `reactor` y no se ha integrado a `main`. Cada supuesto o interpretación tiene código (S-R, I) para que puedas aprobarlo o cambiarlo.
+> **Especificación aprobada por Vicente el 2026-11-26** (S-R1 a S-R4, I-1 a I-4 y H-1).
 
 ## Pregunta de ingeniería
 
@@ -42,7 +42,7 @@ Si se aplican las cuatro correcciones de la Ec. (2) con los parámetros publicad
 
 La lectura más probable es que a, b, c y n se ajustaron con las otras correcciones prácticamente iguales a 1. Esto no se puede confirmar sin el código original. Por eso el simulador usa por defecto `correcciones="articulo"` (solo k_T) y deja `"todas"` como opción. Consecuencia: en la versión por defecto, la humedad y el espacio libre de aire no afectan la velocidad. El caudal de aire sí afecta, a través de la temperatura y del O₂ disponible.
 
-**TODO(Vicente):** confirmar esta elección o, alternativamente, reajustar a, b, c y n con las cuatro correcciones activas. Eso requiere los datos del experimento 1, que el artículo no publica.
+**Decisión (2026-11-26):** se mantiene `correcciones="articulo"` por defecto. Queda abierto reajustar a, b, c y n con las cuatro correcciones activas. El artículo los estimó con el experimento 1 (Rosenbrock, Ecs. 39–40), cuyos datos no publica; el experimento 2 es el de validación y no conviene usarlo para calibrar y validar a la vez.
 
 ## Validación (experimento 2: 12,5 kg, humedad 69,1 %, MO 80,2 % b.s., aire 0,18 m³/h, 14 días)
 
