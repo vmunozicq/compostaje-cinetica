@@ -126,7 +126,7 @@ def plot_bootstrap(boot_df, path):
     ax.set_yticks(y, [f"{r.ID} · {GROUP_LABELS.get(r.Grupo_Residuo, r.Grupo_Residuo)}"
                       for r in d.itertuples()], fontsize=8)
     ax.set_xscale("log")
-    ax.set_xlabel("k de primer orden (d⁻¹, escala log): media e IC 95 % bootstrap")
+    ax.set_xlabel("k de primer orden (d⁻¹, escala log): media e IC 95 % (bootstrap de residuos)")
     ax.set_title("Incertidumbre paramétrica (B = 1000)", loc="left", fontsize=11)
     _style(ax)
     fig.tight_layout()

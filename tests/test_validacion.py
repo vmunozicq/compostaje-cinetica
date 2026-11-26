@@ -3,6 +3,9 @@
 Referencias en data/reference/ (salidas de los scripts originales de 2025):
 - memoria_tabla_criterios.csv: R², N, SST y modelo ganador de las 159 series.
 
+Se ajusta en modo "memoria" (sin desplazar t0 y con Arrhenius en la forma original),
+que es el que reproduce los scripts de 2025.
+
 Tolerancias:
 - R² de primer orden, bifásico y Gompertz: 1e-4. El algoritmo (curve_fit, mismas
   cotas y valores iniciales) es idéntico; solo cambian versiones de SciPy/NumPy.
@@ -24,7 +27,7 @@ TOL_R2 = 1e-4
 @pytest.fixture(scope="module")
 def resultados():
     raw = data.load_raw(data.DEFAULT_RAW_PATH)
-    return pipeline.fit_dataset(raw), pd.read_csv(REF).set_index("ID")
+    return pipeline.fit_dataset(raw, modo="memoria"), pd.read_csv(REF).set_index("ID")
 
 
 def test_mismas_159_series(resultados):

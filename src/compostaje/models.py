@@ -67,6 +67,26 @@ def arrhenius(t_eval, a, ea, c_inf, c0, t_temp, temp_c):
     return sol[-len(t_eval):]
 
 
+def k_arrhenius_tref(temp_c, k_ref, ea, t_ref_c):
+    """k(T) = k_ref·exp[−Ea/R·(1/T − 1/T_ref)], T y T_ref en °C (se convierten a K).
+
+    Reparametrización estándar de Arrhenius (docs/supuestos.md, L1): k_ref es la
+    constante a T_ref y queda mucho menos correlacionada con Ea que A.
+    """
+    t_k = np.asarray(temp_c, float) + 273.15
+    return k_ref * np.exp(-ea / R_GAS * (1.0 / t_k - 1.0 / (t_ref_c + 273.15)))
+
+
+def a_from_kref(k_ref, ea, t_ref_c):
+    """Factor preexponencial equivalente: A = k_ref·exp(Ea / (R·T_ref))."""
+    return k_ref * np.exp(ea / (R_GAS * (t_ref_c + 273.15)))
+
+
+def arrhenius_tref(t_eval, k_ref, ea, c_inf, c0, t_temp, temp_c, t_ref_c):
+    """Mismo ODE que :func:`arrhenius`, con k(T) en la forma de temperatura de referencia."""
+    return arrhenius(t_eval, a_from_kref(k_ref, ea, t_ref_c), ea, c_inf, c0, t_temp, temp_c)
+
+
 # Número de parámetros ajustables por modelo (para AIC/AICc/BIC), como en la memoria.
 N_PARAMS = {"first_order": 2, "biphasic": 4, "gompertz": 3, "arrhenius": 3}
 MODEL_LABELS = {

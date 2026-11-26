@@ -31,14 +31,18 @@ def raw_series_stats(df_raw: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
-def fit_dataset(df_raw: pd.DataFrame) -> pd.DataFrame:
-    """Ajusta los 4 modelos a todas las series válidas y devuelve una fila por serie."""
+def fit_dataset(df_raw: pd.DataFrame, modo: str = "consistente") -> pd.DataFrame:
+    """Ajusta los 4 modelos a todas las series válidas y devuelve una fila por serie.
+
+    ``modo`` se pasa a :func:`fitting.fit_all`. Las columnas ``*_legacy`` (AICc con N y
+    SST sin filtrar, D1) solo reproducen la memoria cuando ``modo="memoria"``.
+    """
     valid = data.build_validated_dataset(df_raw)
     rows = []
     for s in data.iter_series(valid):
-        fits = fitting.fit_all(s.t, s.c, s.temp)
+        fits = fitting.fit_all(s.t, s.c, s.temp, modo=modo)
         row = {"ID": s.uid, "Grupo_Residuo": s.group, "Residuo_Original": s.waste_type,
-               "Variable": s.variable, "N": s.n, "SST": metrics.sst(s.c),
+               "Variable": s.variable, "N": s.n, "t0": float(s.t[0]), "SST": metrics.sst(s.c),
                "Init_MC": s.init_mc, "Init_CN": s.init_cn}
         for r in fits.values():
             row.update(r.as_row())
@@ -72,11 +76,16 @@ def add_legacy_criteria(res: pd.DataFrame, raw_stats: pd.DataFrame) -> pd.DataFr
     return res
 
 
-def winner_counts(res: pd.DataFrame) -> pd.DataFrame:
+def winner_counts(res: pd.DataFrame, res_memoria: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Series ganadas por modelo.
+
+    ``res`` es el ajuste en modo consistente. Si se entrega ``res_memoria`` (modo
+    "memoria"), se agrega la columna que reproduce el cálculo original de la memoria.
+    """
     order = ["1st", "Gomp", "Bi", "Arr", "Ninguno"]
-    out = pd.DataFrame({
-        "AICc (n y SST consistentes)": res["best_aicc"].value_counts(),
-        "AICc (cálculo de la memoria)": res["best_aicc_legacy"].value_counts(),
-        "BIC": res["best_bic"].value_counts(),
-    }).reindex(order).fillna(0).astype(int)
+    cols = {"AICc (versión corregida)": res["best_aicc"].value_counts()}
+    if res_memoria is not None:
+        cols["AICc (cálculo de la memoria)"] = res_memoria["best_aicc_legacy"].value_counts()
+    cols["BIC (versión corregida)"] = res["best_bic"].value_counts()
+    out = pd.DataFrame(cols).reindex(order).fillna(0).astype(int)
     return out.loc[out.sum(axis=1) > 0]

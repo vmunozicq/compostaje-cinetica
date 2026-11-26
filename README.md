@@ -8,7 +8,7 @@
 
 ![App: ajuste de la serie 25_1](docs/figuras/app_serie.png)
 
-**English summary.** Reproducible re-implementation of my chemical engineering thesis (Universidad de Concepción, 2025). It fits first-order, biphasic, modified Gompertz and non-isothermal Arrhenius kinetics to 159 composting series from a public dataset, ranks them by AICc and gives bootstrap confidence intervals for the rate constants. The code reproduces the thesis results exactly (same 159 series, R² identical to 10⁻⁶). Re-running it also exposed two errors in the original analysis, documented in [`docs/supuestos.md`](docs/supuestos.md).
+**English summary.** Reproducible re-implementation of my chemical engineering thesis (Universidad de Concepción, 2025). It fits first-order, biphasic, modified Gompertz and non-isothermal Arrhenius kinetics to 159 composting series from a public dataset, ranks them by AICc and gives bootstrap confidence intervals for the rate constants. The code reproduces the thesis results exactly (same 159 series, R² identical to 10⁻⁶). Re-running it also exposed two errors in the original analysis. The repo now defaults to a corrected version: consistent AICc, time measured from the first sample, Arrhenius reparametrised around a reference temperature, and a residual bootstrap. All of it is documented in [`docs/supuestos.md`](docs/supuestos.md).
 
 ---
 
@@ -25,21 +25,24 @@ C es el carbono orgánico total (TOC) o la materia orgánica (OM), en % base sec
 | Primer orden | C(t) = C∞ + (C₀ − C∞) e^(−k t) | k, C∞ (2) |
 | Bifásico | C(t) = C∞ + (C₀ − C∞) [f e^(−k₁ t) + (1 − f) e^(−k₂ t)] | k₁, k₂, f, C∞ (4) |
 | Gompertz modificado | Y = C₀ − C = P exp{−exp[(Rm e / P)(λ − t) + 1]} | P, Rm, λ (3) |
-| Arrhenius no isotérmico | dC/dt = −A exp(−Eₐ / R T(t)) · (C − C∞) | A, Eₐ, C∞ (3) |
+| Arrhenius no isotérmico | dC/dt = −k_ref exp[−(Eₐ/R)(1/T(t) − 1/T_ref)] · (C − C∞) | k_ref, Eₐ, C∞ (3) |
 
 | Símbolo | Significado | Unidad |
 | --- | --- | --- |
-| t | tiempo de compostaje | d |
+| t | tiempo desde el primer dato medido (t − t₀) | d |
 | k, k₁, k₂ | constantes de degradación | d⁻¹ |
 | Rm, λ | velocidad máxima y fase de latencia (Gompertz) | %·d⁻¹, d |
-| A, Eₐ | factor preexponencial y energía de activación | d⁻¹, J·mol⁻¹ |
+| k_ref, Eₐ | constante a T_ref y energía de activación | d⁻¹, J·mol⁻¹ |
+| T_ref | temperatura media medida en la serie | K |
 | T(t) | temperatura medida, interpolada linealmente | K |
 
-**Ajuste.** Mínimos cuadrados no lineales con cotas: `curve_fit` (Trust Region Reflective) para los tres primeros modelos y L-BFGS-B sobre el ODE para Arrhenius.
+**Ajuste.** Mínimos cuadrados no lineales con cotas: `curve_fit` (Trust Region Reflective) para los tres primeros modelos y `least_squares` sobre el ODE para Arrhenius, con tres arranques de Eₐ.
 
 **Selección.** AICc = n ln(SSE/n) + 2p + 2p(p + 1)/(n − p − 1). Solo compiten los modelos con R² > 0 y n > p + 1.
 
-**Incertidumbre.** Bootstrap de pares, B = 1000. Se informa el IC 95 % por percentiles.
+**Incertidumbre.** Bootstrap de residuos, B = 1000, con el IC 95 % por percentiles. El bootstrap de pares de la memoria también está disponible.
+
+**Dos modos.** `modo="consistente"` (por defecto) aplica las correcciones descritas en la sección 4. `modo="memoria"` reproduce los scripts originales: C(0) = C₀ aunque la serie parta después, Arrhenius en la forma A·exp(−Eₐ/RT) con L-BFGS-B, y bootstrap de pares.
 
 Fuentes: Saldarriaga et al. (2018) e Ibrić et al. (2021) para primer orden; Zwietering et al. (1990) para Gompertz. El detalle está en [`docs/modelo.md`](docs/modelo.md).
 
@@ -52,11 +55,11 @@ Fuentes: Saldarriaga et al. (2018) e Ibrić et al. (2021) para primer orden; Zwi
 - **No cubre** transferencia de calor y masa, aireación, balance de agua ni cinética microbiana explícita. Tampoco predice fuera del rango de los datos.
 - **Datos públicos.** Se usa el [Compost Dataset](https://github.com/1191600618/Compost-Dataset) (Zhang et al., 2025, *Waste Management* 205, 114981), con licencia MIT y fijado a un commit con verificación SHA-256. Ver [`SOURCES.md`](SOURCES.md).
 
-Las diferencias entre el texto de la memoria y los scripts que generaron sus resultados están en [`docs/supuestos.md`](docs/supuestos.md). Cuando difieren, el código sigue a los scripts. Las decisiones abiertas están marcadas como `TODO(Vicente)`.
+Las diferencias entre el texto de la memoria y los scripts que generaron sus resultados están en [`docs/supuestos.md`](docs/supuestos.md). Cuando difieren, el modo "memoria" sigue a los scripts.
 
 ## 4. Validación
 
-El caso de validación consiste en reproducir los resultados de mi memoria con el mismo dataset. Sus tablas originales están en `data/reference/`.
+El caso de validación consiste en reproducir, en modo "memoria", los resultados de mi memoria con el mismo dataset. Sus tablas originales están en `data/reference/`.
 
 | Variable | Memoria | Este código | Diferencia |
 | --- | ---: | ---: | --- |
@@ -73,18 +76,32 @@ Nota: el script original rotulaba como "primer orden" a las 2 series sin ningún
 
 ### Lo que encontré al reproducirla
 
-**El AICc de la memoria mezclaba dos versiones de cada serie.** El R² venía del ajuste con los datos filtrados, pero N y SST venían de la serie sin filtrar. Ocurre en 54 de 159 series. Con un cálculo consistente, el primer orden gana con más claridad:
+**1. El AICc de la memoria mezclaba dos versiones de cada serie.** El R² venía del ajuste con los datos filtrados, pero N y SST venían de la serie sin filtrar. Esto ocurre en 54 de 159 series.
 
-| Mejor modelo | AICc consistente | Cálculo de la memoria |
-| --- | ---: | ---: |
-| Primer orden | 80 | 69 (+2) |
-| Gompertz | 59 | 69 |
-| Bifásico | 17 | 18 |
-| Arrhenius | 1 | 1 |
+**2. El bootstrap numeraba las series de otra forma.** El script no eliminaba una fila sin tiempo, así que la "25_1" de la figura de incertidumbre era otra serie.
 
-La conclusión de la memoria se mantiene: ningún modelo es universal.
+**3. El modelo suponía que todas las series parten en t = 0.** C₀ es el primer dato, pero 58 de las 159 series empiezan después del día 0, algunas en el día 14. El modelo forzaba C(t = 0) = C₀ e inventaba una caída anterior al primer dato. Ahora el tiempo se mide desde el primer dato. Con eso el R² de la serie de lodos 461_1 sube de 0,90 a 0,98 y su k pasa de 0,20 a 0,34 d⁻¹.
 
-**El bootstrap numeraba las series de otra forma.** El script no eliminaba una fila sin tiempo, así que la "25_1" de la figura de incertidumbre era otra serie. Con la numeración correcta, la 25_1 tiene k = 0,34 d⁻¹ (IC 95 %: 0,17 a 0,39).
+**4. El ajuste de Arrhenius no se movía del punto de partida.** En 156 de las 159 series, L-BFGS-B terminaba en los valores iniciales (A = 10⁴ d⁻¹, Eₐ = 30 kJ/mol), porque A y Eₐ se compensan y con escalas tan distintas el gradiente numérico casi no cambia nada. Los resultados de Arrhenius de la memoria reflejan esos valores iniciales, no un ajuste. Con la temperatura de referencia, el R² mediano de Arrhenius sube de 0,85 a 0,96.
+
+| Mejor modelo (AICc) | Memoria | Solo corrigiendo el AICc | Versión corregida |
+| --- | ---: | ---: | ---: |
+| Primer orden | 69 (+2) | 80 | 86 |
+| Gompertz | 69 | 59 | 40 |
+| Bifásico | 18 | 17 | 21 |
+| Arrhenius | 1 | 1 | 10 |
+| Sin ajuste válido | — | 2 | 2 |
+
+La conclusión de la memoria se mantiene: ningún modelo es universal. Pero el primer orden es el mejor punto de partida en más de la mitad de las series. Parte de las series que ganaba Gompertz se explicaban porque su latencia λ absorbía el error del origen del tiempo. Arrhenius gana en 10 series, con Eₐ entre 25 y 100 kJ/mol. En 34 series Eₐ queda en la cota inferior: los datos no muestran dependencia de la temperatura.
+
+| Resultado | Memoria | Versión corregida |
+| --- | --- | --- |
+| Mediana de k, cocina / estiércol / lodos (d⁻¹) | ≈0,12 (solo cocina) | 0,076 / 0,074 / 0,081 |
+| Mediana de λ, cocina / estiércol / lodos (d) | lodos > 3, cocina → 0 | 1,8 / 0,45 / 0,85 |
+| Serie 25_1 (caso de cocina) | primer orden | gana el bifásico (R² 0,999) |
+| IC 95 % de k, serie 25_1 (d⁻¹) | 0,018–0,087 (otra serie) | 0,33–0,42 |
+
+Con la corrección, la constante de primer orden es parecida en los tres sustratos (mediana ≈ 0,08 d⁻¹). La dispersión dentro de cada sustrato es mayor que la diferencia entre ellos.
 
 ![Ganadores por AICc](docs/figuras/ganadores_aicc.png)
 ![k por sustrato](docs/figuras/k_por_sustrato.png)
@@ -95,7 +112,7 @@ App en línea: **https://compostaje-cinetica.streamlit.app** (si está dormida, 
 
 La app tiene cuatro pestañas:
 
-- **Explorar una serie**: elige un sustrato y una serie, compara los cuatro ajustes y calcula el IC 95 % de k, Rm y λ con bootstrap.
+- **Explorar una serie**: elige un sustrato y una serie, compara los cuatro ajustes en la versión corregida o como en la memoria, y calcula el IC 95 % de k, Rm y λ con bootstrap de residuos o de pares.
 - **Resumen de 159 series**: ganadores por criterio y distribución de k por sustrato.
 - **Ajustar mis datos**: pega un CSV con `t`, `C` y opcionalmente `T`, y obtén los cuatro ajustes con su AICc.
 - **Acerca de**.
@@ -115,7 +132,7 @@ pytest
 streamlit run app/streamlit_app.py
 ```
 
-Para regenerar todos los resultados y figuras (unos 2 minutos):
+Para regenerar todos los resultados y figuras en ambos modos (unos 4 minutos):
 
 ```bash
 python scripts/run_pipeline.py --boot 1000

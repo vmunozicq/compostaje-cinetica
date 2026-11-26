@@ -2,7 +2,7 @@
 
 La regla del proyecto es que el modelo es mío: el código implementa lo que hice en la memoria. Para eso se compararon tres fuentes: el texto final de la memoria, los scripts de Python que generaron sus tablas y figuras, y esas tablas (copiadas en `data/reference/`). Cuando difieren, el código sigue a los scripts, porque son los que produjeron los números publicados. Cada diferencia queda aquí.
 
-Las marcadas **TODO(Vicente)** son decisiones abiertas que me toca tomar.
+El repositorio tiene dos modos. `modo="memoria"` reproduce los scripts tal cual, y es el que valida `tests/test_validacion.py`. `modo="consistente"`, que es el modo por defecto, corrige D1 y resuelve L1 a L3 (decisión del 2026-11-25).
 
 ## Errores encontrados en el cálculo original
 
@@ -24,13 +24,13 @@ La conclusión de la memoria se mantiene (no hay modelo universal), pero primer 
 
 ## Afirmaciones de la memoria que los datos no sostienen
 
-Calculadas con las mismas 159 series (idénticas a la tabla original):
+Calculadas con las mismas 159 series (idénticas a la tabla original), primero en modo "memoria" y luego en la versión corregida:
 
-- *"Residuos de cocina: mediana de k ≈ 0,12 d⁻¹"*. La mediana es 0,075 d⁻¹ (media 0,104) con el mismo filtro 0 < k < 0,5.
-- *"Los lodos presentan consistentemente λ > 3 d; los residuos de cocina λ → 0"*. Mediana de λ: lodos 0,94 d, cocina 1,86 d, estiércol 3,2 d.
-- *Serie 25_1 como caso de primer orden*. Por AICc gana el bifásico (n = 8), también con el cálculo original. El primer orden tiene R² = 0,996, pero el bifásico llega a 0,999.
+- *"Residuos de cocina: mediana de k ≈ 0,12 d⁻¹"*. La mediana es 0,075 d⁻¹ en modo memoria y 0,076 en la versión corregida, con el mismo filtro 0 < k < 0,5. En la versión corregida, la mediana de los tres sustratos queda entre 0,074 y 0,081 d⁻¹.
+- *"Los lodos presentan consistentemente λ > 3 d; los residuos de cocina λ → 0"*. En modo memoria, la mediana de λ es 0,94 d en lodos, 1,86 d en cocina y 3,2 d en estiércol. En la versión corregida es 0,85, 1,8 y 0,45 d. El λ alto del estiércol venía de L2.
+- *Serie 25_1 como caso de primer orden*. Por AICc gana el bifásico (n = 8), en ambos modos.
 
-**TODO(Vicente):** decidir si se corrige el texto de esos párrafos en el README y en la presentación, o si se citan los valores nuevos.
+**Decisión:** el texto de la memoria no se modifica, porque ya fue entregada. El README, la app y el material de difusión citan los valores corregidos y explican la diferencia.
 
 ## Diferencias entre texto y scripts (el repo sigue a los scripts)
 
@@ -48,12 +48,26 @@ Calculadas con las mismas 159 series (idénticas a la tabla original):
 
 **D9. Corrección de columnas del dataset.** En 1.662 filas del archivo original (cocina, estiércol y lodos) las columnas pH, temperatura y humedad están rotadas (p. ej., pH = 29,8). Se aplica mi regla de `Corregir_Desplazamiento_Columnas.py`: si la humedad es < 20 %, se rota. Con eso se recuperan exactamente las 417 series y los 3.362 puntos de la memoria.
 
-## Limitaciones conocidas y pendientes
+## Limitaciones resueltas en la versión corregida
 
-**L1. Arrhenius no es identificable.** A y Eₐ se compensan (un A alto con un Eₐ alto da el mismo k). L-BFGS-B con gradiente numérico sobre un ODE converge a mínimos distintos según la versión de SciPy: en 40 de 159 series el R² difiere del original en más de 10⁻³. Por eso el test no compara Arrhenius punto a punto. Gana 1 serie en ambas versiones. **TODO(Vicente):** ¿reparametrizar con una temperatura de referencia, k(T) = k_ref·exp[−Eₐ/R·(1/T − 1/T_ref)], que es la práctica estándar? Cambiaría el modelo, así que no lo hice.
+**L1. Arrhenius no era identificable (resuelto).** A y Eₐ se compensan: un A alto con un Eₐ alto da el mismo k. En modo memoria, L-BFGS-B termina en los valores iniciales (A = 10⁴, Eₐ = 30 kJ/mol) en 156 de las 159 series. Por eso los R² de Arrhenius dependen de la versión de SciPy y el test no los compara punto a punto. La versión corregida usa k(T) = k_ref·exp[−Eₐ/R·(1/T − 1/T_ref)], con T_ref igual a la temperatura media medida en la serie. Se ajusta con `least_squares` (TRF) desde Eₐ₀ = 20, 60 y 100 kJ/mol y se conserva el de menor SSE. Mantiene p = 3 y el rango de Eₐ. También se informa el A equivalente.
 
-**L2. Origen del tiempo.** C₀ es el primer dato, pero el modelo impone C(0) = C₀ aunque la serie empiece en t > 0 (por ejemplo, 461_1 parte en el día 1). El sesgo es pequeño, pero existe. **TODO(Vicente):** ¿desplazar t → t − t₀?
+Con este cambio, el R² mediano sube de 0,85 a 0,96 y Arrhenius gana 10 series, con Eₐ entre 25 y 100 kJ/mol. En 34 series Eₐ queda en la cota inferior (1 kJ/mol): en ellas los datos no muestran efecto de la temperatura.
 
-**L3. Bootstrap de pares con n pequeño.** Con 5 a 9 puntos, remuestrear pares produce réplicas con tiempos repetidos y ajustes degenerados. Algunos IC tocan la cota (454_1: Rm hasta 50). Un bootstrap de residuos sería más estable. **TODO(Vicente):** decidir si se agrega como alternativa.
+**L2. Origen del tiempo (resuelto).** C₀ es el primer dato, pero en modo memoria el modelo impone C(0) = C₀ aunque la serie empiece en t > 0. Esto ocurre en 58 de las 159 series; 12 de ellas parten entre los días 5 y 14. La versión corregida mide el tiempo desde el primer dato (t − t₀). Las funciones `predict` siguen recibiendo el tiempo original. Ejemplo: en 461_1, el R² de primer orden sube de 0,90 a 0,98 y k pasa de 0,20 a 0,34 d⁻¹. Gompertz era el más afectado, porque su latencia λ absorbía el desfase.
 
-**L4. Semilla.** El bootstrap original no fijaba semilla. Aquí `seed = 42` hace los IC reproducibles, pero no idénticos a los de la memoria.
+**L3. Bootstrap de pares con n pequeño (resuelto).** Con 5 a 9 puntos, remuestrear pares produce réplicas con tiempos repetidos y ajustes degenerados. Por ejemplo, el IC de Rm de 454_1 llegaba hasta la cota de 50. Se agregó el bootstrap de residuos: se ajusta una vez, se remuestrean los residuos, se suman a la curva y se reajusta. Es el método por defecto. En 454_1 el IC de Rm queda en 3,9–13,5. Este método supone que el modelo es correcto y que el error es homocedástico (supuesto 5 de `modelo.md`). El de pares se mantiene con `metodo="pares"`.
+
+| Mejor modelo (AICc) | Memoria | Solo D1 | Versión corregida (D1 + L1 + L2) |
+| --- | ---: | ---: | ---: |
+| Primer orden | 69 (+2) | 80 | 86 |
+| Gompertz | 69 | 59 | 40 |
+| Bifásico | 18 | 17 | 21 |
+| Arrhenius | 1 | 1 | 10 |
+| Ninguno | — | 2 | 2 |
+
+## Pendiente
+
+**L4. Semilla.** El bootstrap original no fijaba semilla. Aquí `seed = 42` hace que los IC sean reproducibles, pero no idénticos a los de la memoria.
+
+**L5. Series duplicadas en el dataset.** Algunas series tienen exactamente los mismos ajustes, por ejemplo 11_1 y 135_1, o 43_1 y 430_1. Probablemente son el mismo experimento con dos huellas distintas. No se eliminaron, porque la memoria las contó por separado. **TODO(Vicente):** revisar si se depuran.

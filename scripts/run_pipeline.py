@@ -27,23 +27,31 @@ def main(n_boot: int) -> None:
     raw = data.load_raw(data.download_raw())
     print(f"Filas leídas: {len(raw)}")
 
-    res = pipeline.fit_dataset(raw)
+    # Versión corregida (t − t0, Arrhenius con T_ref) y reproducción de la memoria.
+    res = pipeline.fit_dataset(raw, modo="consistente")
     res.to_csv(RESULTS / "ajustes_por_serie.csv")
-    counts = pipeline.winner_counts(res)
+    res_mem = pipeline.fit_dataset(raw, modo="memoria")
+    res_mem.to_csv(RESULTS / "ajustes_modo_memoria.csv")
+    counts = pipeline.winner_counts(res, res_mem)
     counts.to_csv(RESULTS / "ganadores_por_criterio.csv")
     print(f"Series ajustadas: {len(res)}\n{counts}")
 
     # Bootstrap de las series representativas, con la numeración consistente.
     allser = data.assign_series_ids(raw)
-    rows = []
-    for uid in pipeline.BOOTSTRAP_IDS:
-        s = data.extract_series(allser[allser["Unique_ID"] == uid], require_temp=False)
-        b = bootstrap.bootstrap_series(s.t, s.c, n_boot=n_boot, seed=42)
-        rows.append({"ID": uid, "Grupo_Residuo": s.group, "N": s.n,
-                     **{f"{p}_{q}": b[p][q] for p in ("k", "Rm", "lambda")
-                        for q in ("mean", "lo", "hi", "n_ok")}})
-    boot = pd.DataFrame(rows)
-    boot.to_csv(RESULTS / "bootstrap_series_representativas.csv", index=False)
+    boots = {}
+    for nombre, metodo, modo in (("bootstrap_series_representativas", "residuos", "consistente"),
+                                 ("bootstrap_modo_memoria", "pares", "memoria")):
+        rows = []
+        for uid in pipeline.BOOTSTRAP_IDS:
+            s = data.extract_series(allser[allser["Unique_ID"] == uid], require_temp=False)
+            b = bootstrap.bootstrap_series(s.t, s.c, n_boot=n_boot, seed=42,
+                                           metodo=metodo, modo=modo)
+            rows.append({"ID": uid, "Grupo_Residuo": s.group, "N": s.n,
+                         **{f"{p}_{q}": b[p][q] for p in ("k", "Rm", "lambda")
+                            for q in ("mean", "lo", "hi", "n_ok")}})
+        boots[nombre] = pd.DataFrame(rows)
+        boots[nombre].to_csv(RESULTS / f"{nombre}.csv", index=False)
+    boot = boots["bootstrap_series_representativas"]
 
     # Figuras
     plots.plot_winners(counts, FIGS / "ganadores_aicc.png")

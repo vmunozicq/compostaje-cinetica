@@ -30,19 +30,22 @@ def load_valid() -> pd.DataFrame:
 
 
 @st.cache_data
-def load_results() -> pd.DataFrame:
-    return pd.read_csv(ROOT / "results" / "ajustes_por_serie.csv", index_col="ID")
+def load_results(modo: str = "consistente") -> pd.DataFrame:
+    nombre = "ajustes_por_serie.csv" if modo == "consistente" else "ajustes_modo_memoria.csv"
+    return pd.read_csv(ROOT / "results" / nombre, index_col="ID")
 
 
 @st.cache_resource(show_spinner="Ajustando modelos…", max_entries=64)
-def fit_series(t: tuple, c: tuple, temp: tuple | None):
+def fit_series(t: tuple, c: tuple, temp: tuple | None, modo: str = "consistente"):
     # cache_resource: los resultados incluyen funciones de predicción (no serializables).
-    return fitting.fit_all(np.array(t), np.array(c), None if temp is None else np.array(temp))
+    return fitting.fit_all(np.array(t), np.array(c), None if temp is None else np.array(temp),
+                           modo=modo)
 
 
 @st.cache_data(show_spinner="Bootstrap en curso…")
-def run_bootstrap(t: tuple, c: tuple, n_boot: int):
-    out = bootstrap.bootstrap_series(np.array(t), np.array(c), n_boot=n_boot, seed=42)
+def run_bootstrap(t: tuple, c: tuple, n_boot: int, metodo: str, modo: str):
+    out = bootstrap.bootstrap_series(np.array(t), np.array(c), n_boot=n_boot, seed=42,
+                                     metodo=metodo, modo=modo)
     return {k: {q: v[q] for q in ("mean", "lo", "hi", "n_ok")} for k, v in out.items()}
 
 
@@ -100,10 +103,20 @@ with tab1:
         uid = st.selectbox("Serie (ID)", ids, index=ids.index(default) if default in ids else 0)
         st.caption("Casos de estudio de la memoria: 25_1 (cocina), 461_1 (lodos), 152_1 "
                    "(estiércol).")
+        modo = st.radio("Cálculo", ["consistente", "memoria"], horizontal=True,
+                        format_func={"consistente": "Versión corregida",
+                                     "memoria": "Como en la memoria"}.get,
+                        help="Corregida: tiempo desde el primer dato (t − t₀) y Arrhenius con "
+                             "temperatura de referencia. Memoria: reproduce los scripts "
+                             "originales. Ver docs/supuestos.md.")
+        metodo = st.radio("Bootstrap", ["residuos", "pares"], horizontal=True,
+                          format_func={"residuos": "De residuos", "pares": "De pares"}.get,
+                          help="Residuos: más estable con pocos puntos. Pares: método de la "
+                               "memoria.")
         n_boot = st.select_slider("Réplicas bootstrap", [100, 250, 500, 1000], value=250)
         do_boot = st.button("Calcular IC 95 % (bootstrap)")
     s = data.extract_series(valid[valid["Unique_ID"] == uid])
-    fits = fit_series(tuple(s.t), tuple(s.c), tuple(s.temp))
+    fits = fit_series(tuple(s.t), tuple(s.c), tuple(s.temp), modo)
     ylabel = "TOC (%)" if s.variable == "TOC_percent" else "Materia orgánica (%)"
     with col_b:
         st.plotly_chart(fit_figure(s.t, s.c, fits, ylabel,
@@ -116,7 +129,7 @@ with tab1:
     st.caption("★ = menor AICc (mejor equilibrio entre ajuste y n.º de parámetros). "
                "Con n ≤ p + 1 el AICc no está definido y el modelo no compite.")
     if do_boot:
-        b = run_bootstrap(tuple(s.t), tuple(s.c), n_boot)
+        b = run_bootstrap(tuple(s.t), tuple(s.c), n_boot, metodo, modo)
         c1, c2, c3 = st.columns(3)
         for col, key, label, unit in ((c1, "k", "k primer orden", "d⁻¹"),
                                       (c2, "Rm", "Rm Gompertz", "%/d"),
@@ -131,16 +144,17 @@ with tab1:
 
 with tab2:
     res = load_results()
-    counts = pipeline.winner_counts(res)
+    counts = pipeline.winner_counts(res, load_results("memoria"))
     st.subheader("¿Qué modelo gana según AICc?")
     show = counts.rename(index=SHORT_ES)
     st.bar_chart(show.iloc[:, :2], stack=False, horizontal=True, height=280)
     st.dataframe(show, use_container_width=True)
     st.markdown(
-        "- **n y SST consistentes**: el AICc se calcula con los mismos puntos usados en el "
-        "ajuste (versión por defecto de este repo).\n"
-        "- **Cálculo de la memoria**: reproduce el script original, que usaba N y SST de la "
-        "serie antes del filtro físico-biológico. Ver `docs/supuestos.md`.")
+        "- **Versión corregida** (por defecto): AICc con los mismos puntos del ajuste, tiempo "
+        "medido desde el primer dato y Arrhenius con temperatura de referencia.\n"
+        "- **Cálculo de la memoria**: reproduce los scripts originales (N y SST antes del "
+        "filtro, C(0) = C₀ aunque la serie parta después, Arrhenius sin T_ref). "
+        "Ver `docs/supuestos.md`.")
     st.subheader("Constante de primer orden por sustrato")
     k = res[(res["first_order__k"] > 0) & (res["first_order__k"] < 0.5)]
     fig = go.Figure()

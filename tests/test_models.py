@@ -35,3 +35,12 @@ def test_arrhenius_isotermico_igual_a_primer_orden():
     k = models.k_arrhenius(55.0, a, ea)
     np.testing.assert_allclose(models.arrhenius(t, a, ea, 8, 45, t, temp),
                                models.first_order(t, k, 8, 45), rtol=1e-5)
+
+
+def test_arrhenius_tref_equivale_a_la_forma_original():
+    temp = np.array([20.0, 40.0, 60.0])
+    k_ref, ea, t_ref = 0.1, 50000.0, 45.0
+    a = models.a_from_kref(k_ref, ea, t_ref)
+    assert models.k_arrhenius_tref(temp, k_ref, ea, t_ref) == pytest.approx(
+        models.k_arrhenius(temp, a, ea))
+    assert models.k_arrhenius_tref(t_ref, k_ref, ea, t_ref) == pytest.approx(k_ref)
