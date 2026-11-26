@@ -66,8 +66,8 @@ Con este cambio, el R² mediano sube de 0,85 a 0,96 y Arrhenius gana 10 series, 
 | Arrhenius | 1 | 1 | 10 |
 | Ninguno | — | 2 | 2 |
 
-## Pendiente
+## Otras limitaciones
 
 **L4. Semilla.** El bootstrap original no fijaba semilla. Aquí `seed = 42` hace que los IC sean reproducibles, pero no idénticos a los de la memoria.
 
-**L5. Series duplicadas en el dataset.** Algunas series tienen exactamente los mismos ajustes, por ejemplo 11_1 y 135_1, o 43_1 y 430_1. Probablemente son el mismo experimento con dos huellas distintas. No se eliminaron, porque la memoria las contó por separado. **TODO(Vicente):** revisar si se depuran.
+**L5. Series duplicadas en el dataset.** Algunas series tienen exactamente los mismos ajustes, por ejemplo 11_1 y 135_1, o 43_1 y 430_1. Probablemente son el mismo experimento con dos huellas distintas. **Decisión (2026-11-26):** se mantienen como en la memoria, que las contó por separado.

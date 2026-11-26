@@ -13,7 +13,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from compostaje import bootstrap, data, fitting, pipeline  # noqa: E402
+from compostaje import bootstrap, data, fitting, ml, pipeline  # noqa: E402
 from compostaje.models import MODEL_LABELS  # noqa: E402
 from compostaje.plots import GROUP_COLORS, GROUP_LABELS, MODEL_COLORS  # noqa: E402
 
@@ -47,6 +47,13 @@ def run_bootstrap(t: tuple, c: tuple, n_boot: int, metodo: str, modo: str):
     out = bootstrap.bootstrap_series(np.array(t), np.array(c), n_boot=n_boot, seed=42,
                                      metodo=metodo, modo=modo)
     return {k: {q: v[q] for q in ("mean", "lo", "hi", "n_ok")} for k, v in out.items()}
+
+
+@st.cache_resource(show_spinner="Entrenando el modelo de ML…")
+def ml_model():
+    tab = pd.read_csv(ROOT / "results" / "ml_tabla.csv", index_col="ID")
+    model, dom = ml.fit_final(tab)
+    return tab, model, dom
 
 
 def fit_figure(t, c, fits, ylabel, title):
@@ -88,8 +95,8 @@ st.title("Modelación cinética del compostaje aeróbico")
 st.caption("Primer orden · Bifásico · Gompertz modificado · Arrhenius, con selección por AICc "
            "e incertidumbre bootstrap. Basado en mi memoria de título (Ing. Civil Químico, UdeC).")
 
-tab1, tab2, tab3, tab4 = st.tabs(["Explorar una serie", "Resumen de 159 series",
-                                  "Ajustar mis datos", "Acerca de"])
+tab1, tab2, tab3, tab_ml, tab4 = st.tabs(["Explorar una serie", "Resumen de 159 series",
+                                          "Ajustar mis datos", "Predecir k (ML)", "Acerca de"])
 
 with tab1:
     valid = load_valid()
@@ -191,6 +198,41 @@ with tab3:
         st.dataframe(metrics_table(fits_u), hide_index=True, use_container_width=True)
     except Exception as e:  # noqa: BLE001 - se muestra al usuario
         st.error(f"No pude leer los datos: {e}")
+
+with tab_ml:
+    st.write("¿Se puede estimar k sin un ensayo cinético? Un bosque aleatorio entrenado con "
+             "las 150 series con buen ajuste de primer orden. Ver `docs/modelo_ml.md`.")
+    tab_t, model, dom = ml_model()
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        grupo_ml = st.selectbox("Sustrato ", list(GROUP_LABELS), format_func=GROUP_LABELS.get)
+        entrada = {
+            "Grupo_Residuo": grupo_ml,
+            "Init_pH": st.slider("pH inicial", 4.0, 10.0, 7.0, 0.1),
+            "Init_CN": st.slider("C/N inicial", 5.0, 80.0, 25.0, 0.5),
+            "Init_MC": st.slider("Humedad inicial (%)", 30.0, 85.0, 60.0, 0.5),
+            "T_media": st.slider("Temperatura media del ensayo (°C)", 10.0, 75.0, 40.0, 0.5),
+        }
+    with c2:
+        k_pred = ml.predict_k(model, entrada)
+        ev = dom.evaluar(entrada)
+        st.metric("k predicho (primer orden)", f"{k_pred:.3f} d⁻¹",
+                  help="En validación cruzada, 6 de cada 10 predicciones quedan dentro de un "
+                       "factor 2 del k medido.")
+        if ev["dentro"]:
+            st.success("Dentro del dominio de aplicabilidad: hay ensayos parecidos en los datos.")
+        else:
+            motivo = (f"fuera del rango de: {', '.join(ev['fuera_de_rango'])}"
+                      if ev["fuera_de_rango"] else "combinación poco frecuente en los datos")
+            st.warning(f"Fuera del dominio de aplicabilidad ({motivo}). La predicción es una "
+                       "extrapolación: el error típico se duplica.")
+        cv = pd.read_csv(ROOT / "results" / "ml_validacion.csv")
+        st.dataframe(cv, hide_index=True, use_container_width=True,
+                     column_config={c: st.column_config.NumberColumn(format="%.2f")
+                                    for c in ("RMSE_log10", "R2", "dentro_factor_2")})
+        st.caption("Conclusión: las condiciones iniciales explican poco de k (R² 0,17 en "
+                   "series nuevas y peor que la mediana con un sustrato nuevo). Para diseñar, "
+                   "medir la cinética del sustrato real.")
 
 with tab4:
     st.markdown((ROOT / "docs" / "acerca.md").read_text(encoding="utf-8"))

@@ -15,7 +15,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from compostaje import bootstrap, data, fitting, pipeline, plots  # noqa: E402
+from compostaje import bootstrap, data, fitting, ml, pipeline, plots  # noqa: E402
 
 RESULTS = ROOT / "results"
 FIGS = ROOT / "docs" / "figuras"
@@ -52,6 +52,16 @@ def main(n_boot: int) -> None:
         boots[nombre] = pd.DataFrame(rows)
         boots[nombre].to_csv(RESULTS / f"{nombre}.csv", index=False)
     boot = boots["bootstrap_series_representativas"]
+
+    # Aprendizaje automático: ¿se puede predecir k sin ensayo? (docs/modelo_ml.md)
+    tab = ml.build_ml_table(raw, res)
+    tab.to_csv(RESULTS / "ml_tabla.csv")
+    cv = ml.cross_validate(tab)
+    cv.to_csv(RESULTS / "ml_validacion.csv", index=False)
+    pred = ml.evaluar_dominio(tab)
+    pred.to_csv(RESULTS / "ml_predicciones_cv.csv")
+    print(cv.round(3).to_string(index=False))
+    plots.plot_ml_paridad(pred, FIGS / "ml_paridad.png")
 
     # Figuras
     plots.plot_winners(counts, FIGS / "ganadores_aicc.png")

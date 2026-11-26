@@ -148,3 +148,34 @@ def plot_k_vs(res, xcol, xlabel, path, k_max=0.5):
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+def plot_ml_paridad(pred, path):
+    """k predicho (validación cruzada) vs. k ajustado, marcando el dominio de aplicabilidad."""
+    fig, ax = plt.subplots(figsize=(5.6, 5))
+    lims = [pred[["k_ajustado", "k_predicho"]].min().min() / 1.5,
+            pred[["k_ajustado", "k_predicho"]].max().max() * 1.5]
+    ax.plot(lims, lims, color=INK_2, lw=1)
+    ax.fill_between(lims, [v / 2 for v in lims], [v * 2 for v in lims], color=GRID, alpha=0.6,
+                    lw=0, label="Dentro de un factor 2")
+    for dentro, mk, lab in ((True, "o", "Dentro del dominio"), (False, "X", "Fuera del dominio")):
+        d = pred[pred["dentro"] == dentro]
+        ax.scatter(d["k_ajustado"], d["k_predicho"], s=30 if dentro else 46, marker=mk,
+                   c=[GROUP_COLORS.get(g, INK_2) for g in d["Grupo_Residuo"]],
+                   edgecolor="white" if dentro else INK, linewidth=0.8, label=lab, zorder=3)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+    ax.set_xlabel("k ajustado a los datos (d⁻¹)")
+    ax.set_ylabel("k predicho por el bosque aleatorio (d⁻¹)")
+    ax.set_title("Predicción de k en series no vistas", loc="left", fontsize=11)
+    handles = [plt.Line2D([], [], marker="o", ls="", color=c, label=GROUP_LABELS[g])
+               for g, c in GROUP_COLORS.items()]
+    ax.legend(handles=ax.get_legend_handles_labels()[0][:1] + handles
+              + [plt.Line2D([], [], marker="X", ls="", color=INK, label="Fuera del dominio")],
+              frameon=False, fontsize=8, loc="upper left")
+    _style(ax)
+    fig.tight_layout()
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
