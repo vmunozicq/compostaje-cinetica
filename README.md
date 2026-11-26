@@ -106,6 +106,21 @@ Con la corrección, la constante de primer orden es parecida en los tres sustrat
 ![Ganadores por AICc](docs/figuras/ganadores_aicc.png)
 ![k por sustrato](docs/figuras/k_por_sustrato.png)
 
+### Más allá de la memoria: ¿se puede predecir k sin ensayo?
+
+La memoria dejó fuera de alcance el aprendizaje automático y la predicción fuera del rango de los datos. Se entrenó un bosque aleatorio que predice k a partir del sustrato, el pH, el C/N, la humedad inicial y la temperatura media. Está validado con series que no vio y con un sustrato completo dejado fuera ([`docs/modelo_ml.md`](docs/modelo_ml.md)).
+
+| Validación | R² | Predicciones dentro de un factor 2 |
+| --- | ---: | ---: |
+| Series nuevas | 0,17 | 60 % |
+| Sustrato nuevo | −0,21 | 54 % |
+
+Las condiciones iniciales explican poco de k: un modelo entrenado con la literatura sirve como primera estimación, pero para diseñar hay que medir la cinética del sustrato real. Un dominio de aplicabilidad avisa cuando la entrada se aleja de los datos de entrenamiento. Fuera de él, el error típico es un factor 2,6; dentro, un factor 1,6.
+
+![Predicción de k](docs/figuras/ml_paridad.png)
+
+Un simulador de reactor con calor, agua y O₂ está en especificación ([`docs/modelo_reactor.md`](docs/modelo_reactor.md)).
+
 ## 5. Demo
 
 App en línea: **https://compostaje-cinetica.streamlit.app** (si está dormida, pulsa el botón para despertarla; tarda unos 30 s).
@@ -115,6 +130,7 @@ La app tiene cuatro pestañas:
 - **Explorar una serie**: elige un sustrato y una serie, compara los cuatro ajustes en la versión corregida o como en la memoria, y calcula el IC 95 % de k, Rm y λ con bootstrap de residuos o de pares.
 - **Resumen de 159 series**: ganadores por criterio y distribución de k por sustrato.
 - **Ajustar mis datos**: pega un CSV con `t`, `C` y opcionalmente `T`, y obtén los cuatro ajustes con su AICc.
+- **Predecir k (ML)**: estima k para un sustrato y unas condiciones, y avisa si la entrada está fuera del dominio de los datos.
 - **Acerca de**.
 
 | Resumen | Ajustar mis datos |
