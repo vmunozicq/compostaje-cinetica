@@ -1,66 +1,77 @@
-# Ampliación 2: simulador de reactor (calor, agua, O₂ y cinética)
+# Ampliación 2: simulador de reactor (calor, agua, O₂ y CO₂)
 
-> **Borrador para revisión de Vicente. Aún no hay código.** Este documento extrae el modelo de la literatura antes de implementarlo, para que lo apruebes. Las partes que faltan están marcadas como **[FALTA]**.
+> **Para revisión de Vicente.** El código está en la rama `reactor` y no se ha integrado a `main`. Cada supuesto o interpretación tiene código (S-R, I) para que puedas aprobarlo o cambiarlo.
 
-## Por qué un modelo publicado y no tus 159 series
+## Pregunta de ingeniería
 
-El Compost Dataset no informa caudal de aire, O₂, volumen del reactor ni temperatura ambiente. Un balance de energía, de agua y de O₂ no se puede calibrar ni validar con esos datos. Por eso se reproduce un modelo publicado que trae sus propios experimentos de validación. Tu cinética entra como punto de comparación: la corrección de temperatura del modelo es justamente Arrhenius con temperatura de referencia, como en la versión corregida del repo.
+¿Cuánto aire hay que soplar y con qué humedad partir para que el compost se caliente lo suficiente (higienización sobre 55 °C) y degrade la materia orgánica en el menor tiempo? Es la pregunta de la memoria, el tiempo de residencia, respondida con balances de materia y energía en vez de solo un ajuste.
 
-## Fuente principal
+## Fuente
 
-Papraćanin, E. (2022). *Kinetic parameters estimation and model evaluation for the aerobic bioconversion process of the organic fraction of municipal solid waste.* Kemija u industriji 71(3-4), 185–199. doi:10.15255/KUI.2021.048. Licencia **CC BY 4.0**.
+Petric, I., Selimbašić, V. (2008). *Development and validation of mathematical model for aerobic composting process.* Chem. Eng. J. 139(2), 304–317. doi:10.1016/j.cej.2007.08.017. El artículo es de pago: el repositorio cita ecuaciones y constantes, pero no lo redistribuye. Una versión posterior del mismo grupo, con un reactor de 57 L, es Papraćanin (2022), *Kem. Ind.* 71, 185–199 (CC BY 4.0).
 
-El artículo remite a dos referencias para los balances completos: Papraćanin y Petric (2016), *Bull. Chem. Technol. Bosnia Herzegovina* 47, 39–48 (acceso abierto), y Petric y Selimbašić (2008), *Chem. Eng. J.* 139(2), 304–317, doi:10.1016/j.cej.2007.08.017 (de pago).
+¿Por qué no se usan tus 159 series? El Compost Dataset no informa caudal de aire, O₂, volumen del reactor ni temperatura ambiente. Sin esas variables no se puede validar un balance de energía.
 
-## Sistema
+## Modelo (números de ecuación del artículo)
 
-Es un reactor piloto de 57 L, aislado, con aire forzado de 0,4 L·min⁻¹·kg_OM⁻¹ y aire ambiente a 22,5 ± 2,5 °C, durante 360 h. Supuestos del autor: volumen de gas y presión constantes, gas saturado de vapor de agua, caudal de aire constante, fases sólido-líquida y gaseosa a la misma temperatura, y sustrato homogéneo al inicio.
+Es un reactor de mezcla completa de 32 L con tres fases.
 
-## Ecuaciones disponibles en la fuente principal (n.º de ecuación del artículo)
+- **Cinética.** dm_OM/dt = −k·m_OM^n (1). k = k_T·k_O₂·k_H₂O·k_FAS (2), con k_T = a[b^(T−20) − c^(T−60)] (4), T en °C. Las correcciones de O₂, humedad y espacio libre son (5), (6) y (7)–(10). Parámetros de la Tabla 5: a = 8,83·10⁻⁵ kg^(1−n) h⁻¹, b = 1,0533, c = 1,2247, n = 2,894.
+- **Estequiometría.** Fórmula C₈H₁₉O₅N; Y_O₂ = 0,705, Y_CO₂ = 1,276 e Y_H₂O = 0,360 kg/kg_OM (Tabla 2).
+- **O₂ y CO₂ disueltos.** dm_i/dt = R_i − k_La(He_i X_i − p_i) (12)–(14), con Henry según (15)–(16).
+- **Agua del material.** dm_w/dt = Y_w·r − k_La(P_s − P_v) (23)–(26).
+- **Gases (O₂, CO₂, H₂O, N₂).** Entrada de aire húmedo, transferencia y salida (27)–(31).
+- **Energía del gas** (32)–(33) **y del sólido-líquido** (34). Incluye calor de reacción Δh = 1,54·10⁷ J/kg_OM (38), pérdidas por paredes UA = 1900 J h⁻¹ K⁻¹ (36), convección h_c = 10⁵ J h⁻¹ K⁻¹ y entalpía de los gases que salen.
 
-- (1) Degradación: dm_OM/dt = −k · m_OM^n, con m_OM en kg y t en h.
-- (2) k = k_T · k_O₂ · k_pH · k_H₂O · k_FAS.
-- (3) Temperatura: k_T = α · exp[β (1/293 − 1/T)], con β = Eₐ/R y T en K.
-- (4) Oxígeno: k_O₂ = O₂ / [k_O₂(0) · (K_O₂ + O₂)], con O₂ en % v/v.
-- (6) Humedad: k_H₂O = 1 / [exp(−γ (1 − S_m) + Δ) + 1], donde S_m es la fracción de materia seca.
-- (8) Espacio libre de aire: k_FAS = 1 / [exp(−χ · FAS + ω) + 1].
-- (9) Estequiometría: C_aH_bO_cN_d + (4a + b − 2c − 3d)/4 O₂ → a CO₂ + (b − 3d)/2 H₂O + d NH₃.
-- (10) CO₂ disuelto: dm_CO₂/dt = Y_CO₂ · dm_OM/dt − k_L a_CO₂ (He_CO₂ f_CO₂ X_CO₂ − p_CO₂).
-- (11) Energía de la fase sólido-líquida: dT/dt = [Q_cw + Q_G − Q_c^T − Σ entalpías de los gases transferidos − (T − 273,15)(c_pw dm_w/dt + c_pOM dm_OM/dt)] / (c_pw m_w + c_pOM m_OM + c_pNT m_NT).
-- Tabla 3: balances de gases disueltos (CO₂, O₂, NH₃), de agua en el material, de cinco gases en la fase gaseosa y de temperatura del gas. En total son 12 variables de estado.
+Son 10 variables de estado: masa de materia orgánica, O₂ y CO₂ disueltos, agua, O₂, CO₂, H₂O y N₂ en el gas, temperatura del gas y temperatura del sólido. Se resuelven con `solve_ivp` (LSODA), en `src/compostaje/reactor.py`.
 
-## Parámetros ajustados por el autor (Tabla 5, mezcla M1)
+## Supuestos e interpretaciones (para tu aprobación)
 
-| Parámetro | Valor | Unidad | IC 95 % |
-| --- | ---: | --- | --- |
-| α | 1,2688·10⁻⁵ | según n | 1,12–1,42·10⁻⁵ |
-| β = Eₐ/R | 4544,1 | K (Eₐ = 37,8 kJ/mol) | 4401–4679 |
-| n | ≈ 1,9 | — | 1,65–2,10 |
-| Y_CO₂ | 3,17 | kg CO₂/kg | 2,96–3,36 |
-| Q_c | 1753,3 | J/kg_OM | 1704–1796 |
-| k_O₂(0) | 0,1554 | — | 0,129–0,182 |
-| K_O₂ | 0,868 | % v/v | 0,37–1,36 |
-| γ, Δ | 17,80; 6,86 | — | — |
-| χ, ω | 23,67; 3,50 | — | — |
+- **S-R1.** No se modela el NH₃. Requiere el pH como variable de estado, y el propio artículo lo reproduce mal (su Fig. 7). Su efecto en los balances de O₂ y energía es menor (Y_NH₃ = 0,069).
+- **S-R2.** La entalpía del vapor de agua que sale incluye el calor latente (2,44 MJ/kg). El artículo no define h̄_i; sin el latente, el modelo pierde 6,6 kg de agua sin enfriarse, lo que es físicamente imposible.
+- **S-R3.** El coeficiente de densidad aparente C de la Ec. (10) no tiene valor en el artículo, solo el rango 0,15–0,4. Se usa 0,25, que deja 16,6 L de gas en el reactor.
+- **S-R4.** La temperatura inicial y la ambiente son 28 °C, leídas de la Fig. 3. El artículo no las informa.
+- **I-1.** Los c_p de los gases de la Tabla 2 se informan como J kmol⁻¹ K⁻¹, pero sus valores son de J mol⁻¹ K⁻¹. Los del agua, materia orgánica e inorgánica son J kg⁻¹ K⁻¹.
+- **I-2.** La Ec. (16), Henry del CO₂, da atm, no Pa: se multiplica por 101 325.
+- **I-3.** En (13) y (24) se aplica el signo físico: se consume O₂ y se producen CO₂ y agua.
+- **I-4.** El O₂ y el CO₂ se informan en base seca, porque el gas pasa por un condensador antes del analizador.
 
-Condiciones iniciales de M1: m_OM = 6,3 kg, agua = 11,35 kg, O₂ = 5,84·10⁻⁵ kmol, CO₂ = 5·10⁻⁶ kmol y T = 295 K.
+## Hallazgo H-1: las correcciones de la Ec. 2
 
-## [FALTA] para implementar
+Si se aplican las cuatro correcciones de la Ec. (2) con los parámetros publicados, el simulador se queda corto. Llega a 52 °C en vez de 64 °C y convierte el 28 % de la materia orgánica en vez del 39 %. Si se aplica solo k_T, reproduce el experimento y la curva del modelo del propio artículo (máximo cercano a 68 °C en torno a las 28 h).
 
-Estos datos están en Papraćanin y Petric (2016) o en Petric y Selimbašić (2008), no en la fuente principal:
+La lectura más probable es que a, b, c y n se ajustaron con las otras correcciones prácticamente iguales a 1. Esto no se puede confirmar sin el código original. Por eso el simulador usa por defecto `correcciones="articulo"` (solo k_T) y deja `"todas"` como opción. Consecuencia: en la versión por defecto, la humedad y el espacio libre de aire no afectan la velocidad. El caudal de aire sí afecta, a través de la temperatura y del O₂ disponible.
 
-1. Q_G: el calor de reacción por kg de materia orgánica degradada.
-2. Q_cw: la forma de la pérdida por paredes, con su coeficiente y su área.
-3. c_pw, c_pOM, c_pNT y los c_p de los gases.
-4. k_L a, He y f para O₂, CO₂ y NH₃, la constante Y_w y la correlación de presión de vapor de la Tabla 3.
-5. k_pH, que el artículo nombra pero no define.
-6. FAS inicial, composición elemental (a, b, c, d) y masa inorgánica m_NT de cada mezcla.
-7. Una incoherencia de unidades: α figura en kg⁻⁰·⁵ h⁰·⁵, pero con n ≈ 1,9 la ecuación (1) exige kg⁻⁰·⁹ h⁻¹.
+**TODO(Vicente):** confirmar esta elección o, alternativamente, reajustar a, b, c y n con las cuatro correcciones activas. Eso requiere los datos del experimento 1, que el artículo no publica.
 
-## Caso de validación propuesto
+## Validación (experimento 2: 12,5 kg, humedad 69,1 %, MO 80,2 % b.s., aire 0,18 m³/h, 14 días)
 
-Simular las mezclas M2 y M3 con los parámetros de M1 y comparar con las Figuras 2 y 3 del artículo, digitalizadas. Las referencias son las del autor: RMSE de temperatura de 2,89 K (M2) y 2,21 K (M3), y RMSE de materia orgánica de 0,20 y 0,21 kg. El simulador queda validado si llega a esos órdenes de magnitud.
+Los datos medidos se digitalizaron a mano de las Figs. 3, 4 y 6 (`data/reference/petric2008_exp2_digitalizado.csv`). La incertidumbre de lectura es de ±1,5 °C, ±1 punto de conversión y ±0,5 % de O₂.
 
-## Qué aportaría al diseño
+| Variable | RMSE | Sesgo medio | Error máximo | Modelo del artículo (Tabla 6) |
+| --- | ---: | ---: | ---: | --- |
+| Temperatura | 5,8 °C | +3,2 °C | 14,0 °C | media 2,3 °C, máx 14,3 °C |
+| Conversión de MO | 1,9 puntos | +1,4 | 3,0 | media 1,0, máx 3,8 |
+| O₂ de salida | 2,7 % vol | +2,1 | 5,4 | media 0,6, máx 3,3 |
 
-Con el modelo validado se puede estudiar la relación entre caudal de aire y temperatura máxima (higienización sobre 55 °C), la pérdida de humedad, que puede frenar la degradación, y el tiempo para llegar a una conversión dada. Eso responde la pregunta de la memoria, el tiempo de residencia, con física y no solo con un ajuste empírico.
+La conversión queda bien reproducida y la temperatura máxima también. Sobre las limitaciones:
+
+- El sistema se enfría más lento que el experimento al final, con unos 4 °C de diferencia. Con S-R4 puede que la temperatura ambiente real haya sido menor.
+- La caída de O₂ del primer día y medio es más corta y menos profunda que la medida (mínimo de 16 % contra 12 %).
+
+Criterio de aceptación (`tests/test_reactor.py`): RMSE de conversión < 3 puntos, de temperatura < 7 °C y de O₂ < 3,5 %.
+
+## Resultado de diseño: caudal de aire (`results/reactor_caudal.csv`)
+
+| Caudal (m³/h) | T máx (°C) | Horas sobre 55 °C | Conversión a 14 d | O₂ mínimo |
+| ---: | ---: | ---: | ---: | ---: |
+| 0,06 | 71 | 144 | 45 % | 6 % |
+| 0,10 | 71 | 110 | 43 % | 12 % |
+| 0,18 | 69 | 70 | 41 % | 16 % |
+| 0,26 | 66 | 47 | 39 % | 18 % |
+
+Más aire enfría y reduce el tiempo sobre 55 °C. Bajo 0,06 m³/h el O₂ se acerca al límite de 5 %, bajo el cual aparecen zonas anaerobias. El artículo encontró su óptimo en 0,10 m³/h, igual a 0,54 L min⁻¹ kg_OM⁻¹. El simulador da la misma dirección, pero con un efecto más suave sobre la conversión.
+
+## Fuera de alcance
+
+Gradientes espaciales (pilas o reactores grandes), NH₃ y pH, y cinética microbiana explícita con biomasa (Monod). El artículo los descarta por ser poco identificables con datos de reactor.

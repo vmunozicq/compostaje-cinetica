@@ -179,3 +179,25 @@ def plot_ml_paridad(pred, path):
     fig.tight_layout()
     fig.savefig(path, dpi=200)
     plt.close(fig)
+
+
+def plot_reactor_validacion(sims: dict, exp, path):
+    """Simulaciones del reactor vs. experimento 2 de Petric y Selimbašić (2008)."""
+    paneles = [("T_C", "Temperatura (°C)"), ("conversion_pct", "Conversión de MO (%)"),
+               ("O2_pct", "O₂ en el gas de salida (% vol)")]
+    fig, axes = plt.subplots(1, 3, figsize=(11, 3.6))
+    estilos = [("-", MODEL_COLORS["first_order"]), ("--", MODEL_COLORS["gompertz"])]
+    for ax, (var, lab) in zip(axes, paneles, strict=True):
+        for (nombre, s), (ls, col) in zip(sims.items(), estilos, strict=False):
+            ax.plot(s["t_h"], s[var], ls, color=col, lw=2, label=nombre)
+        e = exp[exp["variable"] == var]
+        ax.scatter(e["t_h"], e["valor"], s=22, color=INK, zorder=4, label="Experimento",
+                   edgecolor="white", linewidth=1)
+        ax.set_xlabel("Tiempo (h)")
+        ax.set_title(lab, loc="left", fontsize=10)
+        ax.set_xticks(range(0, 337, 48))
+        _style(ax)
+    axes[0].legend(frameon=False, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(path, dpi=200)
+    plt.close(fig)
