@@ -15,7 +15,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from compostaje import bootstrap, data, fitting, ml, pipeline, plots  # noqa: E402
+from compostaje import bootstrap, data, fitting, ml, pipeline, plots, reactor  # noqa: E402
 
 RESULTS = ROOT / "results"
 FIGS = ROOT / "docs" / "figuras"
@@ -62,6 +62,19 @@ def main(n_boot: int) -> None:
     pred.to_csv(RESULTS / "ml_predicciones_cv.csv")
     print(cv.round(3).to_string(index=False))
     plots.plot_ml_paridad(pred, FIGS / "ml_paridad.png")
+
+    # Simulador de reactor (docs/modelo_reactor.md)
+    exp = reactor.cargar_experimento(ROOT / "data" / "reference"
+                                     / "petric2008_exp2_digitalizado.csv")
+    sims = {"Simulador (parámetros del artículo)": reactor.simular(),
+            "Con todas las correcciones de la Ec. 2": reactor.simular(
+                par=reactor.Parametros(correcciones="todas"))}
+    val = pd.concat([reactor.validar(s, exp).assign(variante=k) for k, s in sims.items()])
+    val.to_csv(RESULTS / "reactor_validacion.csv", index=False)
+    print(val.round(2).to_string(index=False))
+    plots.plot_reactor_validacion(sims, exp, FIGS / "reactor_validacion.png")
+    reactor.variar("caudal_m3_h", [0.06, 0.09, 0.10, 0.14, 0.18, 0.22, 0.26]).to_csv(
+        RESULTS / "reactor_caudal.csv", index=False)
 
     # Figuras
     plots.plot_winners(counts, FIGS / "ganadores_aicc.png")

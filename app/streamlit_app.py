@@ -13,7 +13,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from compostaje import bootstrap, data, fitting, ml, pipeline  # noqa: E402
+from compostaje import bootstrap, data, fitting, ml, pipeline, reactor  # noqa: E402
 from compostaje.models import MODEL_LABELS  # noqa: E402
 from compostaje.plots import GROUP_COLORS, GROUP_LABELS, MODEL_COLORS  # noqa: E402
 
@@ -56,6 +56,13 @@ def ml_model():
     return tab, model, dom
 
 
+@st.cache_data(show_spinner="Integrando el balance de masa y energía…")
+def simular_reactor(caudal: float, humedad: float, masa: float, t0: float, ta: float,
+                    correcciones: str) -> pd.DataFrame:
+    op = reactor.Operacion(masa_kg=masa, humedad=humedad, caudal_m3_h=caudal, t0_c=t0, ta_c=ta)
+    return reactor.simular(op, reactor.Parametros(correcciones=correcciones))
+
+
 def fit_figure(t, c, fits, ylabel, title):
     fig = go.Figure()
     t_s = np.linspace(min(t), max(t), 200)
@@ -95,8 +102,9 @@ st.title("Modelación cinética del compostaje aeróbico")
 st.caption("Primer orden · Bifásico · Gompertz modificado · Arrhenius, con selección por AICc "
            "e incertidumbre bootstrap. Basado en mi memoria de título (Ing. Civil Químico, UdeC).")
 
-tab1, tab2, tab3, tab_ml, tab4 = st.tabs(["Explorar una serie", "Resumen de 159 series",
-                                          "Ajustar mis datos", "Predecir k (ML)", "Acerca de"])
+tab1, tab2, tab3, tab_ml, tab_r, tab4 = st.tabs([
+    "Explorar una serie", "Resumen de 159 series", "Ajustar mis datos", "Predecir k (ML)",
+    "Simular reactor", "Acerca de"])
 
 with tab1:
     valid = load_valid()
@@ -233,6 +241,78 @@ with tab_ml:
         st.caption("Conclusión: las condiciones iniciales explican poco de k (R² 0,17 en "
                    "series nuevas y peor que la mediana con un sustrato nuevo). Para diseñar, "
                    "medir la cinética del sustrato real.")
+
+with tab_r:
+    st.write("Reactor de compostaje de 32 L con aireación forzada: balances de materia "
+             "orgánica, agua, O₂, CO₂ y energía del sólido y del gas (Petric y Selimbašić, "
+             "2008). Valores por defecto = experimento 2 del artículo. Ver "
+             "`docs/modelo_reactor.md`.")
+    c1, c2 = st.columns([1, 3])
+    with c1:
+        caudal = st.slider("Caudal de aire (m³/h)", 0.02, 0.40, 0.18, 0.01)
+        hum = st.slider("Humedad inicial (%)", 40.0, 80.0, 69.1, 0.5)
+        masa = st.slider("Masa inicial (kg)", 5.0, 20.0, 12.5, 0.5)
+        t0 = st.slider("Temperatura inicial (°C)", 10.0, 40.0, 28.0, 0.5)
+        ta = st.slider("Temperatura ambiente (°C)", 5.0, 40.0, 28.0, 0.5)
+        corr = st.radio("Factores de corrección de la cinética",
+                        ["articulo", "todas"],
+                        format_func={"articulo": "Solo temperatura (reproduce el artículo)",
+                                     "todas": "T, O₂, humedad y espacio libre"}.get,
+                        help="Hallazgo H-1: con los parámetros publicados, solo el factor de "
+                             "temperatura reproduce el experimento 2.")
+    with c2:
+        try:
+            sim = simular_reactor(caudal, hum / 100, masa, t0, ta, corr)
+        except (ValueError, RuntimeError) as e:
+            st.error(str(e))
+            st.stop()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("T máxima", f"{sim['T_C'].max():.1f} °C")
+        m2.metric("Horas ≥ 55 °C", f"{int((sim['T_C'] >= 55).sum())} h",
+                  help="Referencia de higienización; el criterio normativo no se evalúa aquí.")
+        m3.metric("Conversión a 14 d", f"{sim['conversion_pct'].iloc[-1]:.1f} %")
+        m4.metric("O₂ mínimo en el gas", f"{sim['O2_pct'].min():.1f} %")
+        exp = None
+        defecto = (caudal, hum, masa, t0, ta) == (0.18, 69.1, 12.5, 28.0, 28.0)
+        if defecto:
+            exp = reactor.cargar_experimento(
+                ROOT / "data" / "reference" / "petric2008_exp2_digitalizado.csv")
+        g1, g2 = st.columns(2)
+        paneles = [("T_C", "Temperatura del sustrato (°C)"),
+                   ("conversion_pct", "Conversión de materia orgánica (%)"),
+                   ("O2_pct", "O₂ en el gas de salida (%, base seca)"),
+                   ("humedad_pct", "Humedad del sustrato (%)")]
+        for i, (var, titulo) in enumerate(paneles):
+            fig = go.Figure()
+            fig.add_scatter(x=sim["t_h"], y=sim[var], mode="lines", name="Modelo",
+                            line=dict(color="#2a6f97", width=2))
+            if exp is not None and var in set(exp["variable"]):
+                e = exp[exp["variable"] == var]
+                fig.add_scatter(x=e["t_h"], y=e["valor"], mode="markers", name="Experimento 2",
+                                marker=dict(color="#c0504d", size=8))
+            fig.update_layout(title=titulo, xaxis_title="Tiempo (h)", height=300,
+                              margin=dict(l=10, r=10, t=40, b=10), showlegend=exp is not None,
+                              legend=dict(orientation="h", y=-0.3))
+            (g1 if i % 2 == 0 else g2).plotly_chart(fig, use_container_width=True)
+        if defecto:
+            st.caption("Puntos: datos digitalizados a mano de las Figs. 3, 4 y 6 del artículo.")
+    st.subheader("Efecto del caudal de aire (resto en el experimento 2)")
+    st.dataframe(pd.read_csv(ROOT / "results" / "reactor_caudal.csv"), hide_index=True,
+                 use_container_width=True,
+                 column_config={"caudal_m3_h": st.column_config.NumberColumn("Caudal (m³/h)",
+                                                                             format="%.2f"),
+                                "T_max_C": st.column_config.NumberColumn("T máx (°C)",
+                                                                         format="%.1f"),
+                                "t_T_max_h": st.column_config.NumberColumn("Hora de T máx",
+                                                                           format="%.0f"),
+                                "conversion_final_pct": st.column_config.NumberColumn(
+                                    "Conversión (%)", format="%.1f"),
+                                "O2_min_pct": st.column_config.NumberColumn("O₂ mín (%)",
+                                                                            format="%.1f"),
+                                "horas_sobre_55C": st.column_config.NumberColumn(
+                                    "Horas ≥ 55 °C", format="%.0f")})
+    st.caption("Más aire enfría y seca: baja la temperatura máxima y las horas sobre 55 °C, "
+               "pero mantiene el O₂ lejos de condiciones anóxicas. Con poco aire el O₂ cae a ~6 %.")
 
 with tab4:
     st.markdown((ROOT / "docs" / "acerca.md").read_text(encoding="utf-8"))
