@@ -136,12 +136,21 @@ Más aire enfría y seca el material: acorta la fase termófila, pero mantiene e
 
 ![Validación del simulador](docs/figuras/reactor_validacion.png)
 
+### Para qué sirve: dimensionar una planta
+
+La pestaña **Dimensionar mi planta** une las tres partes anteriores. Entras toneladas por día de residuo, humedad, materia orgánica y la estabilización que se busca, y entrega el tiempo de residencia, el volumen, el área de pila, el aire, el O₂, el agua evaporada y el calor, más un informe descargable ([`docs/modelo_diseno.md`](docs/modelo_diseno.md)).
+
+Para 10 t/d de residuo de cocina y una estabilización del 90 %, el tiempo de residencia va de 14 a 69 días según el k del sustrato (P75 a P25 de 45 ensayos). Esa dispersión de 5 veces es el argumento para medir la cinética del residuo real antes de construir.
+
+![Dimensionar mi planta](docs/figuras/app_diseno.png)
+
 ## 5. Demo
 
 App en línea: **https://compostaje-cinetica.streamlit.app** (si está dormida, pulsa el botón para despertarla; tarda unos 30 s).
 
 La app tiene estas pestañas:
 
+- **Dimensionar mi planta**: tiempo de residencia, volumen, área, aire y agua para tu caudal de residuo, con escenarios conservador, típico y optimista e informe descargable.
 - **Explorar una serie**: elige un sustrato y una serie, compara los cuatro ajustes en la versión corregida o como en la memoria, y calcula el IC 95 % de k, Rm y λ con bootstrap de residuos o de pares.
 - **Resumen de 159 series**: ganadores por criterio y distribución de k por sustrato.
 - **Ajustar mis datos**: pega un CSV con `t`, `C` y opcionalmente `T`, y obtén los cuatro ajustes con su AICc.

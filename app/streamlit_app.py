@@ -13,7 +13,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from compostaje import bootstrap, data, fitting, ml, pipeline, reactor  # noqa: E402
+from compostaje import bootstrap, data, diseno, fitting, ml, pipeline, reactor  # noqa: E402
 from compostaje.models import MODEL_LABELS  # noqa: E402
 from compostaje.plots import GROUP_COLORS, GROUP_LABELS, MODEL_COLORS  # noqa: E402
 
@@ -63,6 +63,16 @@ def simular_reactor(caudal: float, humedad: float, masa: float, t0: float, ta: f
     return reactor.simular(op, reactor.Parametros(correcciones=correcciones))
 
 
+def miles(x: float) -> str:
+    """Entero con punto de miles, a la chilena."""
+    return f"{x:,.0f}".replace(",", ".")
+
+
+@st.cache_data(show_spinner="Calculando razones de aire y agua con el simulador…")
+def razones_reactor() -> diseno.RazonesReactor:
+    return diseno.razones_reactor()
+
+
 def fit_figure(t, c, fits, ylabel, title):
     fig = go.Figure()
     t_s = np.linspace(min(t), max(t), 200)
@@ -102,9 +112,78 @@ st.title("Modelación cinética del compostaje aeróbico")
 st.caption("Primer orden · Bifásico · Gompertz modificado · Arrhenius, con selección por AICc "
            "e incertidumbre bootstrap. Basado en mi memoria de título (Ing. Civil Químico, UdeC).")
 
-tab1, tab2, tab3, tab_ml, tab_r, tab4 = st.tabs([
-    "Explorar una serie", "Resumen de 159 series", "Ajustar mis datos", "Predecir k (ML)",
-    "Simular reactor", "Acerca de"])
+tab_d, tab1, tab2, tab3, tab_ml, tab_r, tab4 = st.tabs([
+    "Dimensionar mi planta", "Explorar una serie", "Resumen de 159 series", "Ajustar mis datos",
+    "Predecir k (ML)", "Simular reactor", "Acerca de"])
+
+with tab_d:
+    st.write("Estimación de prefactibilidad para una planta de compostaje: tiempo de "
+             "residencia, volumen, área, aire y agua, con la incertidumbre de k entre "
+             "ensayos de la literatura. Ver `docs/modelo_diseno.md`.")
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        grupo_d = st.selectbox("Residuo", list(GROUP_LABELS), format_func=GROUP_LABELS.get,
+                               key="grupo_d")
+        q_t_d = st.number_input("Residuo a tratar (t/d, húmedo)", 0.1, 5000.0, 10.0, 1.0)
+        hum_d = st.slider("Humedad (%)", 30.0, 85.0, 60.0, 0.5, key="hum_d")
+        om_d = st.slider("Materia orgánica (% base seca)", 20.0, 100.0, 80.0, 1.0)
+        x_d = st.slider("Estabilización exigida (% de lo degradable)", 50.0, 99.0, 90.0, 1.0)
+        rho_d = st.number_input("Densidad aparente (kg/m³)", 100.0, 1500.0, 600.0, 10.0,
+                                help="Dato del usuario: depende del residuo y del "
+                                     "estructurante. 600 es solo un valor de ejemplo.")
+        h_d = st.number_input("Altura de pila (m)", 0.5, 5.0, 2.0, 0.1,
+                              help="Dato del usuario; 2 m es solo un valor de ejemplo.")
+        usar_k = st.checkbox("Tengo un k medido para mi residuo",
+                             help="Por ejemplo, ajustado en la pestaña 'Ajustar mis datos'.")
+        k_user = (st.number_input("k medido (1/d)", 0.001, 5.0, 0.08, 0.001, format="%.3f")
+                  if usar_k else None)
+    with c2:
+        try:
+            ent = diseno.EntradaPlanta(q_t_d, hum_d / 100, om_d / 100, x_d / 100, rho_d, h_d)
+            cin = diseno.cinetica_sustrato(load_results(), grupo_d)
+            raz = razones_reactor()
+            tabla = diseno.dimensionar(ent, cin, raz, k_user)
+        except ValueError as e:
+            st.error(str(e))
+            st.stop()
+        base = tabla.iloc[0]
+        st.markdown(f"**Escenario de diseño: {base.escenario}**")
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Tiempo de residencia", f"{base.tiempo_residencia_d:.0f} d")
+        m2.metric("Volumen en proceso", f"{miles(base.volumen_m3)} m³")
+        m3.metric("Área de pila", f"{miles(base.area_pila_m2)} m²")
+        m4.metric("Aire de diseño", f"{miles(base.aire_control_termico_m3_h)} m³/h",
+                  help="Aire para retirar calor y agua, por kg de MO degradada como en el "
+                       "reactor validado. El estequiométrico es mucho menor.")
+        st.dataframe(
+            tabla[["escenario", "k_d", "tiempo_residencia_d", "volumen_m3", "area_pila_m2"]],
+            hide_index=True, use_container_width=True,
+            column_config={
+                "escenario": "Escenario",
+                "k_d": st.column_config.NumberColumn("k (1/d)", format="%.3f"),
+                "tiempo_residencia_d": st.column_config.NumberColumn("Tiempo (d)",
+                                                                     format="%.0f"),
+                "volumen_m3": st.column_config.NumberColumn("Volumen (m³)", format="%.0f"),
+                "area_pila_m2": st.column_config.NumberColumn("Área (m²)", format="%.0f")})
+        b1, b2, b3, b4 = st.columns(4)
+        b1.metric("MO degradada", f"{miles(base.om_degradada_kg_d)} kg/d")
+        b2.metric("O₂ consumido", f"{miles(base.o2_kg_d)} kg/d",
+                  help=f"Aire estequiométrico: {miles(base.aire_estequiometrico_m3_h)} m³/h")
+        b3.metric("Agua evaporada", f"{miles(base.agua_evaporada_kg_d)} kg/d")
+        b4.metric("Calor liberado", f"{miles(base.calor_liberado_MJ_d)} MJ/d")
+        if k_user is None:
+            tt = tabla["tiempo_residencia_d"]
+            st.caption(f"k de {cin.n_series} series de {GROUP_LABELS[grupo_d].lower()} con "
+                       f"R² ≥ 0,5. Entre el escenario conservador y el optimista el tiempo "
+                       f"cambia {tt.iloc[0] / tt.iloc[-1]:.0f} "
+                       "veces: para diseñar en serio, mide el k de tu residuo.")
+        st.download_button("Descargar informe (Markdown)",
+                           diseno.informe_markdown(ent, cin, raz, tabla),
+                           file_name="dimensionamiento_compostaje.md", mime="text/markdown")
+        st.download_button("Descargar tabla (CSV)", tabla.to_csv(index=False),
+                           file_name="dimensionamiento_compostaje.csv", mime="text/csv")
+        st.caption("Prefactibilidad con datos de laboratorio. No incluye volteos, lixiviados, "
+                   "emisiones ni requisitos normativos.")
 
 with tab1:
     valid = load_valid()
