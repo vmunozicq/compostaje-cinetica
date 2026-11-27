@@ -1,6 +1,6 @@
 # Ampliación 3: dimensionamiento preliminar de una planta
 
-> **Para revisión de Vicente.** El código está en la rama `diseno`. Cada supuesto tiene un código (S-D) para que lo apruebes o lo cambies. Esta ampliación no altera ninguna cifra existente del repositorio.
+> **Especificación aprobada por Vicente el 2026-11-26** (S-D1 a S-D5). Esta ampliación no altera ninguna cifra existente del repositorio.
 
 ## Pregunta de ingeniería
 
@@ -21,7 +21,7 @@ Tengo X toneladas por día de un residuo. ¿Cuántos días tiene que estar en co
 - **S-D1.** f_deg y k se definen sobre la concentración de TOC (% b.s.), no sobre la masa. Es la misma variable que ajusta la memoria. La MO degradada que resulta es una estimación de orden de magnitud.
 - **S-D2.** El aire y la evaporación por kg de MO degradada del reactor de 32 L se trasladan a escala de planta. En un reactor de laboratorio las pérdidas por pared pesan más que en una pila grande, así que el aire real de control térmico puede ser distinto. La intensidad de aireación se conserva por kg degradado, no por m³.
 - **S-D3.** El volumen usa la masa húmeda de entrada sin descontar la pérdida de masa durante el proceso. Queda del lado conservador.
-- **S-D4.** **TODO(Vicente):** la densidad aparente y la altura de pila no están en las fuentes del repositorio. La app las pide como entradas, con 600 kg/m³ y 2 m solo como valores de ejemplo. Confirma esos valores o reemplázalos por otros con cita.
+- **S-D4.** La densidad aparente y la altura de pila no están en las fuentes del repositorio. Son entradas del usuario; 600 kg/m³ y 2 m son solo valores de ejemplo (aprobado 2026-11-26).
 - **S-D5.** Los k vienen de ensayos de laboratorio de la literatura, con su temperatura. No se corrigen por la temperatura de la planta.
 
 ## Caso de ejemplo (10 t/d de residuo de cocina, humedad 60 %, MO 80 % b.s., X = 90 %)
